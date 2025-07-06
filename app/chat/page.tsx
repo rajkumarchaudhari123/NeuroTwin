@@ -1,65 +1,86 @@
-// app/chat/page.tsx
 "use client";
+import React, { useState } from "react";
+import axios, { AxiosError } from "axios";
 
-import { useState } from "react";
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+};
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState([
-    { role: "ai", text: "Hi! I am your NeuroTwin. Ask me anything." },
-  ]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState<string>("");
+  const [messages, setMessages] = useState<Message[]>([]);
 
-  const sendMessage = async () => {
+  const handleSend = async () => {
     if (!input.trim()) return;
 
-    const newMessages = [...messages, { role: "user", text: input }];
+    const userMessage: Message = { role: "user", content: input };
+    const newMessages = [...messages, userMessage];
     setMessages(newMessages);
     setInput("");
 
-    // 🧠 Placeholder: replace this with OpenAI API call
-    setTimeout(() => {
-      setMessages([
-        ...newMessages,
-        { role: "ai", text: `Tumne poocha: "${input}"` },
-      ]);
-    }, 1000);
+    try {
+      const response = await axios.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+          model: "llama3-8b-8192", // or "llama3-70b-8192" if needed
+          messages: newMessages,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.NEXT_PUBLIC_GROQ_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const aiMessage: Message = response.data.choices?.[0]?.message || {
+        role: "assistant",
+        content: "Something went wrong!",
+      };
+
+      setMessages((prev) => [...prev, aiMessage]);
+    } catch (error: unknown) {
+      const err = error as AxiosError;
+      console.error("❌ API Error:", err.response?.data || err.message);
+      alert("Error talking to AI.");
+    }
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-black text-white">
-      <div className="text-center py-6 text-2xl font-bold bg-gray-900">
-        🧠 Chat with Your NeuroTwin
-      </div>
+    <div className="min-h-screen p-4 bg-gray-100">
+      <h1 className="text-2xl font-bold mb-4">💬 Chat with Groq AI</h1>
+      <div className="bg-white p-4 rounded shadow max-w-2xl mx-auto">
+        <div className="h-[400px] overflow-y-auto mb-4 space-y-3">
+          {messages.map((msg, index) => (
+            <div
+              key={index}
+              className={`p-2 rounded max-w-xs ${
+                msg.role === "user"
+                  ? "bg-blue-100 ml-auto text-right"
+                  : "bg-gray-200 text-left"
+              }`}
+            >
+              <p>{msg.content}</p>
+            </div>
+          ))}
+        </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`max-w-xl px-4 py-2 rounded-lg ${
-              msg.role === "user"
-                ? "bg-purple-700 self-end ml-auto"
-                : "bg-gray-800 self-start"
-            }`}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            className="flex-1 border border-gray-300 p-2 rounded"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Type your message..."
+          />
+          <button
+            className="bg-blue-600 text-white px-4 py-2 rounded"
+            onClick={handleSend}
           >
-            {msg.text}
-          </div>
-        ))}
-      </div>
-
-      <div className="p-4 bg-gray-900 flex gap-2">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          className="flex-1 px-4 py-2 rounded-lg bg-gray-800 text-white focus:outline-none"
-          placeholder="Ask something..."
-        />
-        <button
-          onClick={sendMessage}
-          className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg"
-        >
-          Send
-        </button>
+            Send
+          </button>
+        </div>
       </div>
     </div>
   );

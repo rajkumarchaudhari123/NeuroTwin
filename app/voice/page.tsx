@@ -1,75 +1,158 @@
 "use client";
+import React, { useEffect, useRef, useState } from "react";
+import axios, { AxiosError } from "axios";
+import Background from "@/components/Background";
 
-import { useEffect, useRef, useState } from "react";
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+};
 
-export default function VoicePage() {
-  const [transcript, setTranscript] = useState("");
-  const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+export default function ChatPage() {
+  const [input, setInput] = useState<string>("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-    if (!SpeechRecognition) {
-      console.error("Speech Recognition is not supported in this browser.");
-      return;
+  const speakEnglish = async (hinglishText: string) => {
+    try {
+      const res = await axios.post(
+        "https://translate.googleapis.com/translate_a/single",
+        null,
+        {
+          params: {
+            client: "gtx",
+            sl: "hi",
+            tl: "en",
+            dt: "t",
+            q: hinglishText,
+          },
+        }
+      );
+
+      // 🔍 Replace `any` with proper typing
+      const englishText =
+        (res.data[0] as Array<[string]>).map((d) => d[0]).join("") ||
+        hinglishText;
+
+      const utterance = new SpeechSynthesisUtterance(englishText);
+      utterance.voice =
+        speechSynthesis
+          .getVoices()
+          .find((v) => v.name.includes("Google UK English Female")) ?? null;
+      utterance.rate = 1;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+      speechSynthesis.speak(utterance);
+    } catch (err: unknown) {
+      console.error("Translation/Voice Error:", err);
     }
+  };
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = "en-US";
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
+  const handleSend = async () => {
+    if (!input.trim()) return;
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      const result = event.results[0][0].transcript;
-      setTranscript(result);
-    };
+    const userMessage: Message = { role: "user", content: input };
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
+    setInput("");
+    setLoading(true);
 
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      if (event.error === "no-speech") {
-        alert("😶 No speech detected. Try speaking clearly into the mic.");
-      } else {
-        console.error("Speech recognition error:", event.error);
-      }
-    };
+    try {
+      const response = await axios.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+          model: "llama3-8b-8192",
+          messages: newMessages,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.NEXT_PUBLIC_GROQ_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
-    recognition.onspeechend = () => {
-      recognition.stop();
-      setIsListening(false);
-    };
+      const aiMessage: Message = response.data.choices?.[0]?.message ?? {
+        role: "assistant",
+        content: "Something went wrong!",
+      };
 
-    recognitionRef.current = recognition;
-  }, []);
-
-  const toggleListening = () => {
-    if (!recognitionRef.current) return;
-
-    if (isListening) {
-      recognitionRef.current.stop();
-    } else {
-      setTranscript("");
-      recognitionRef.current.start();
+      setMessages((prev) => [...prev, aiMessage]);
+      speakEnglish(aiMessage.content);
+    } catch (error: unknown) {
+      const err = error as AxiosError;
+      console.error("❌ API Error:", err.response?.data || err.message);
+      alert("Error talking to AI.");
+    } finally {
+      setLoading(false);
     }
-
-    setIsListening(!isListening);
   };
 
   return (
-    <div className="max-w-xl mx-auto text-center mt-10">
-      <h1 className="text-2xl font-bold mb-4">🎙️ Talk to NeuroTwin</h1>
-      <button
-        onClick={toggleListening}
-        className={`px-6 py-2 rounded text-white mb-6 ${
-          isListening ? "bg-red-600" : "bg-green-600"
-        }`}
-      >
-        {isListening ? "Stop Listening" : "Start Talking"}
-      </button>
+    <div className="relative min-h-screen overflow-hidden bg-black text-white">
+      <Background />
+      <div className="relative z-10 max-w-3xl mx-auto p-6">
+        <h1 className="text-4xl font-bold text-center mb-6 text-cyan-400">
+          🤖 JARVIS
+        </h1>
 
-      <div className="p-4 bg-gray-900 rounded border border-gray-700">
-        <h2 className="font-semibold text-white mb-2">Transcript:</h2>
-        <p className="text-white">{transcript || "Speak something..."}</p>
+        <div className="bg-white/10 backdrop-blur-md rounded-xl shadow-lg p-6">
+          <div className="h-[400px] overflow-y-auto mb-4 pr-2 scroll-smooth">
+            {messages.map((msg, index) => (
+              <div
+                key={index}
+                className={`flex ${
+                  msg.role === "user" ? "justify-end" : "justify-start"
+                } mb-3`}
+              >
+                <div
+                  className={`rounded-2xl px-4 py-2 max-w-[75%] text-sm ${
+                    msg.role === "user"
+                      ? "bg-cyan-500 text-white"
+                      : "bg-white text-black"
+                  }`}
+                >
+                  {msg.content}
+                </div>
+              </div>
+            ))}
+            {loading && (
+              <div className="flex justify-start mb-3">
+                <div className="rounded-2xl px-4 py-2 bg-white text-black text-sm animate-pulse">
+                  Typing...
+                </div>
+              </div>
+            )}
+            <div ref={scrollRef}></div>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <input
+              type="text"
+              value={input}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setInput(e.target.value)
+              }
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) =>
+                e.key === "Enter" && handleSend()
+              }
+              className="flex-1 p-3 border border-gray-600 rounded-xl bg-black text-white focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              placeholder="Type in Hinglish or Hindi..."
+            />
+
+            <button
+              onClick={handleSend}
+              className="bg-cyan-500 hover:bg-cyan-600 text-white px-6 py-2 rounded-xl font-semibold transition"
+            >
+              Send
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

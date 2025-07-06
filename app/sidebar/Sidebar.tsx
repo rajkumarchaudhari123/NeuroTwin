@@ -13,6 +13,7 @@ const navItems = [
   { name: "Journal", href: "/journal" },
   { name: "Settings", href: "/settings" },
   { name: "Voice", href: "/voice" },
+  { name: "Sacnner", href: "/scanner" },
 ];
 
 export default function Sidebar() {
