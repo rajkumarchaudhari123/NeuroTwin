@@ -24,3 +24,47 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+/* Starfield animation */
+@keyframes starScroll {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-1000px);
+  }
+}
+
+.stars,
+.stars2,
+.stars3 {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 200%;
+  height: 200%;
+  background-repeat: repeat;
+  background-size: contain;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.stars {
+  background-image: radial-gradient(white 1px, transparent 1px);
+  background-size: 3px 3px;
+  animation: starScroll 100s linear infinite;
+  opacity: 0.3;
+}
+
+.stars2 {
+  background-image: radial-gradient(cyan 1px, transparent 1px);
+  background-size: 2px 2px;
+  animation: starScroll 150s linear infinite;
+  opacity: 0.2;
+}
+
+.stars3 {
+  background-image: radial-gradient(#0ff 1px, transparent 1px);
+  background-size: 1px 1px;
+  animation: starScroll 200s linear infinite;
+  opacity: 0.1;
+}

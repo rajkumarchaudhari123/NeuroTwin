@@ -13,7 +13,7 @@ const navItems = [
   { name: "Journal", href: "/journal" },
   { name: "Settings", href: "/settings" },
   { name: "Voice", href: "/voice" },
-  { name: "Sacnner", href: "/scanner" },
+  { name: "Scanner", href: "/scanner" },
 ];
 
 export default function Sidebar() {
@@ -21,23 +21,28 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <div className="md:flex">
-      {/* Mobile Toggle Button */}
-      <div className="md:hidden p-4 flex justify-between items-center bg-black text-white">
-        <h1 className="text-xl font-bold">🧠 NeuroTwin</h1>
-        <button onClick={() => setOpen(!open)}>
-          {open ? <X size={24} /> : <Menu size={24} />}
+    <>
+      {/* Mobile Top Bar with Hamburger */}
+      <div className="md:hidden fixed top-4 left-4 z-50 bg-gray-900 p-2 rounded-md">
+        <button onClick={() => setOpen(true)}>
+          <Menu size={28} color="white" />
         </button>
       </div>
 
-      {/* Sidebar */}
-      <aside
-        className={`${
-          open ? "block" : "hidden"
-        } md:block w-full md:w-64 bg-gray-900 text-white h-screen p-6 sticky top-0 z-50`}
+      {/* Sidebar Drawer */}
+      <div
+        className={`fixed top-0 left-0 h-full w-64 bg-gray-900 text-white z-40 transform transition-transform duration-300 ease-in-out ${
+          open ? "translate-x-0" : "-translate-x-full"
+        } md:translate-x-0 md:static md:block`}
       >
-        <h2 className="text-2xl font-bold mb-8">🧠 NeuroTwin</h2>
-        <nav className="space-y-4">
+        <div className="flex justify-between items-center p-6 border-b border-gray-700">
+          <h2 className="text-2xl font-bold">🧠 NeuroTwin</h2>
+          {/* Close Button Only on Mobile */}
+          <button className="md:hidden" onClick={() => setOpen(false)}>
+            <X size={24} />
+          </button>
+        </div>
+        <nav className="p-6 space-y-3">
           {navItems.map((item) => (
             <Link
               key={item.href}
@@ -45,12 +50,21 @@ export default function Sidebar() {
               className={`block px-4 py-2 rounded hover:bg-purple-700 transition ${
                 pathname === item.href ? "bg-purple-700" : ""
               }`}
+              onClick={() => setOpen(false)} // close after click
             >
               {item.name}
             </Link>
           ))}
         </nav>
-      </aside>
-    </div>
+      </div>
+
+      {/* Black overlay when sidebar is open on mobile */}
+      {open && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
+          onClick={() => setOpen(false)}
+        ></div>
+      )}
+    </>
   );
 }
