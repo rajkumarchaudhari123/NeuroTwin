@@ -4,47 +4,11 @@ import axios from "axios";
 import Background from "@/components/Background";
 
 // Define proper types for API responses
-interface TranslationResponse {
-  0: Array<[string, ...unknown[]]>;
-}
-
 interface ModelResponse {
   data: Array<{
     id: string;
     active: boolean;
   }>;
-}
-
-// Define proper types for Speech Recognition
-interface SpeechRecognitionInstance {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-  onresult: (event: SpeechRecognitionResultEvent) => void;
-  onerror: (event: SpeechRecognitionErrorEvent) => void;
-  onend: () => void;
-}
-
-interface SpeechRecognitionResultEvent {
-  results: {
-    [index: number]: {
-      [index: number]: {
-        transcript: string;
-      };
-    };
-  };
-}
-
-interface SpeechRecognitionErrorEvent {
-  error: string;
-}
-
-// Define type for Speech Recognition constructor
-interface SpeechRecognitionConstructor {
-  new (): SpeechRecognitionInstance;
 }
 
 type Message = {
@@ -56,13 +20,10 @@ export default function ChatPage() {
   const [input, setInput] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [isListening, setIsListening] = useState<boolean>(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>("");
   const [apiKeyStatus, setApiKeyStatus] = useState<"checking" | "valid" | "invalid">("checking");
-  const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
   // Check API key and fetch models
   useEffect(() => {
@@ -73,45 +34,6 @@ export default function ChatPage() {
     } else {
       setApiKeyStatus("valid");
       fetchAvailableModels();
-    }
-  }, []);
-
-  // Initialize speech recognition
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      // First cast to unknown, then to the specific type to avoid type errors
-      const windowWithSpeech = window as unknown as {
-        SpeechRecognition?: SpeechRecognitionConstructor;
-        webkitSpeechRecognition?: SpeechRecognitionConstructor;
-      };
-      
-      const SpeechRecognition = windowWithSpeech.SpeechRecognition || 
-                                windowWithSpeech.webkitSpeechRecognition;
-      
-      if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
-        
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        recognition.lang = "hi-IN";
-        
-        recognition.onresult = (event: SpeechRecognitionResultEvent) => {
-          const transcript = event.results[0][0].transcript;
-          setInput(transcript);
-          setIsListening(false);
-        };
-        
-        recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-          console.error("Speech recognition error:", event.error);
-          setIsListening(false);
-        };
-        
-        recognition.onend = () => {
-          setIsListening(false);
-        };
-        
-        recognitionRef.current = recognition;
-      }
     }
   }, []);
 
@@ -171,86 +93,6 @@ export default function ChatPage() {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const translateText = async (text: string, toEnglish: boolean = true) => {
-    try {
-      const res = await axios.post<TranslationResponse>(
-        "https://translate.googleapis.com/translate_a/single",
-        null,
-        {
-          params: {
-            client: "gtx",
-            sl: toEnglish ? "hi" : "en",
-            tl: toEnglish ? "en" : "hi",
-            dt: "t",
-            q: text,
-          },
-        }
-      );
-
-      return res.data[0].map((item) => item[0]).join("");
-    } catch (err) {
-      console.error("Translation error:", err);
-      return text;
-    }
-  };
-
-  const speakText = async (text: string, isHindi: boolean = false) => {
-    try {
-      setIsSpeaking(true);
-      
-      // Cancel any ongoing speech
-      window.speechSynthesis.cancel();
-      
-      // Translate to English for better voice if it's Hindi/Hinglish
-      const textToSpeak = isHindi ? await translateText(text, true) : text;
-      
-      const utterance = new SpeechSynthesisUtterance(textToSpeak);
-      
-      // Get available voices
-      const voices = window.speechSynthesis.getVoices();
-      
-      // Try to find a good English voice
-      const preferredVoice = voices.find(
-        (v) => v.name.includes("Google UK English Female") || 
-               v.name.includes("Microsoft Heera") ||
-               v.name.includes("Female")
-      ) || voices.find((v) => v.lang.includes("en")) || voices[0];
-      
-      utterance.voice = preferredVoice || null;
-      utterance.rate = 1;
-      utterance.pitch = 1;
-      utterance.volume = 1;
-      
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
-      
-      window.speechSynthesis.speak(utterance);
-    } catch (err) {
-      console.error("Voice error:", err);
-      setIsSpeaking(false);
-    }
-  };
-
-  const startListening = () => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.start();
-        setIsListening(true);
-      } catch (error) {
-        console.error("Failed to start listening:", error);
-      }
-    } else {
-      alert("Speech recognition is not supported in your browser. Please use Chrome or Edge.");
-    }
-  };
-
-  const stopListening = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-    }
-  };
-
   const handleSend = async () => {
     if (!input.trim() || !selectedModel) return;
 
@@ -293,9 +135,6 @@ export default function ChatPage() {
 
       setMessages((prev) => [...prev, aiMessage]);
       
-      // Speak the response
-      await speakText(aiContent, false);
-      
     } catch (error) {
       console.error("❌ API Error:", error);
       
@@ -328,65 +167,6 @@ export default function ChatPage() {
     }
   };
 
-  const handleVoiceSend = async () => {
-    if (!input.trim() || !selectedModel) return;
-
-    const userMessage: Message = { role: "user", content: input };
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
-    setInput("");
-    setLoading(true);
-
-    try {
-      const apiKey = process.env.NEXT_PUBLIC_GROQ_API_KEY;
-      
-      if (!apiKey) {
-        throw new Error("API key not configured");
-      }
-
-      // Translate user input to English for better AI understanding
-      const englishQuery = await translateText(input, true);
-      
-      const response = await axios.post(
-        "https://api.groq.com/openai/v1/chat/completions",
-        {
-          model: selectedModel,
-          messages: [...messages, { role: "user", content: englishQuery }],
-          temperature: 0.7,
-          max_tokens: 1024,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-          timeout: 30000,
-        }
-      );
-
-      const aiContent = response.data.choices?.[0]?.message?.content || "Sorry, I couldn't process that.";
-      
-      // Translate response back to Hindi/Hinglish for better understanding
-      const hindiResponse = await translateText(aiContent, false);
-      
-      const aiMessage: Message = {
-        role: "assistant",
-        content: hindiResponse,
-      };
-
-      setMessages((prev) => [...prev, aiMessage]);
-      
-      // Speak the response in Hindi
-      await speakText(hindiResponse, true);
-      
-    } catch (error) {
-      console.error("❌ API Error:", error);
-      alert("Error talking to AI.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   if (apiKeyStatus === "invalid") {
     return (
       <div className="relative min-h-screen bg-black text-white">
@@ -409,7 +189,7 @@ export default function ChatPage() {
       <Background />
       <div className="relative z-10 max-w-3xl mx-auto p-6">
         <h1 className="text-4xl font-bold text-center mb-6 text-cyan-400">
-          🤖 JARVIS - Voice Enabled
+          🤖 JARVIS - Chat
         </h1>
 
         <div className="bg-white/10 backdrop-blur-md rounded-xl shadow-lg p-6">
@@ -434,35 +214,34 @@ export default function ChatPage() {
 
           {/* Chat Messages */}
           <div className="h-[400px] overflow-y-auto mb-4 pr-2 scroll-smooth">
-            {messages.map((msg, index) => (
-              <div
-                key={index}
-                className={`flex ${
-                  msg.role === "user" ? "justify-end" : "justify-start"
-                } mb-3`}
-              >
-                <div
-                  className={`rounded-2xl px-4 py-2 max-w-[75%] text-sm ${
-                    msg.role === "user"
-                      ? "bg-cyan-500 text-white"
-                      : "bg-white text-black"
-                  }`}
-                >
-                  {msg.content}
-                </div>
+            {messages.length === 0 ? (
+              <div className="text-center text-gray-400 mt-10">
+                <p>👋 Hello! How can I help you today?</p>
               </div>
-            ))}
+            ) : (
+              messages.map((msg, index) => (
+                <div
+                  key={index}
+                  className={`flex ${
+                    msg.role === "user" ? "justify-end" : "justify-start"
+                  } mb-3`}
+                >
+                  <div
+                    className={`rounded-2xl px-4 py-2 max-w-[75%] text-sm ${
+                      msg.role === "user"
+                        ? "bg-cyan-500 text-white"
+                        : "bg-white text-black"
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
+                </div>
+              ))
+            )}
             {loading && (
               <div className="flex justify-start mb-3">
                 <div className="rounded-2xl px-4 py-2 bg-white text-black text-sm animate-pulse">
                   Thinking...
-                </div>
-              </div>
-            )}
-            {isSpeaking && (
-              <div className="flex justify-start mb-3">
-                <div className="rounded-2xl px-4 py-2 bg-green-500 text-white text-sm">
-                  🔊 Speaking...
                 </div>
               </div>
             )}
@@ -478,58 +257,24 @@ export default function ChatPage() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
                 className="flex-1 p-3 border border-gray-600 rounded-xl bg-black text-white focus:outline-none focus:ring-2 focus:ring-cyan-400"
-                placeholder="Type or speak in Hinglish/Hindi..."
+                placeholder="Type your message..."
                 disabled={loading}
               />
-              
-              {/* Voice Input Button */}
-              <button
-                onClick={isListening ? stopListening : startListening}
-                disabled={loading}
-                className={`px-4 py-2 rounded-xl font-semibold transition ${
-                  isListening 
-                    ? "bg-red-500 hover:bg-red-600 animate-pulse" 
-                    : "bg-purple-500 hover:bg-purple-600"
-                }`}
-                title={isListening ? "Stop listening" : "Start voice input"}
-              >
-                🎤
-              </button>
             </div>
 
-            <div className="flex gap-2">
-              {/* Text Send Button */}
-              <button
-                onClick={handleSend}
-                disabled={loading || !input.trim()}
-                className="flex-1 bg-cyan-500 hover:bg-cyan-600 text-white px-6 py-2 rounded-xl font-semibold transition disabled:opacity-50"
-              >
-                Send Text
-              </button>
-              
-              {/* Voice Send Button */}
-              <button
-                onClick={handleVoiceSend}
-                disabled={loading || !input.trim()}
-                className="flex-1 bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-xl font-semibold transition disabled:opacity-50"
-              >
-                🎤 Send & Speak
-              </button>
-            </div>
+            <button
+              onClick={handleSend}
+              disabled={loading || !input.trim()}
+              className="w-full bg-cyan-500 hover:bg-cyan-600 text-white px-6 py-2 rounded-xl font-semibold transition disabled:opacity-50"
+            >
+              {loading ? "Sending..." : "Send Message"}
+            </button>
           </div>
-
-          {/* Voice Status */}
-          {isListening && (
-            <div className="mt-3 text-center text-sm text-purple-400 animate-pulse">
-              🎤 Listening... Speak now
-            </div>
-          )}
         </div>
 
         {/* Instructions */}
         <div className="mt-4 text-center text-sm text-gray-400">
-          <p>💡 Tip: You can type in Hinglish or Hindi, or use voice input!</p>
-          <p>🔊 The AI will respond in Hindi and speak it out loud</p>
+          <p>💡 Type your message and press Enter or click Send</p>
         </div>
       </div>
     </div>
